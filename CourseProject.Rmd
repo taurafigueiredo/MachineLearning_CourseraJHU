@@ -1,0 +1,87 @@
+---
+title: "Machine Learning | Course Project"
+author: "Taurã Figueiredo"
+date: "Saturday, August 23, 2014"
+output: html_document
+---
+## Machine learning algorithm
+
+Download files provided in the assignment and load into R   
+```{r eval=FALSE, warning=FALSE}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "pml-training.csv")
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "pml-testing.csv")
+```
+```{r warning=FALSE}
+pmlTraining <- read.csv("pml-training.csv")
+pmlTesting <- read.csv("pml-testing.csv")
+```
+
+The first thing we should do is cleanup the data to keep only the relevant information.   
+So, to do that, I create a function that remove every collumn that have more than 50% of it rows with empty data, NA data and not a number data. Also, before return the new dataframe, I remove the first 4 collumns that are timestamp or not relevant info to predict.
+
+```{r warning=FALSE}
+# Remove empty, NA and not useful variables
+ProcessData <- function (dataframe){
+  col <- vector(mode = "numeric")
+  count <- 0
+  for(i in 1:ncol(dataframe))
+  {
+    if(colnames(dataframe)[i]=='classe'){next;}
+    
+    total <- length(dataframe[,i]);
+    
+    NAs <- length(dataframe[is.na(dataframe[,i]),i]);
+    empty <- length(dataframe[dataframe[,i]=='',i])
+    notNumber <- length(dataframe[!is.numeric(dataframe[,i]),i]);
+    
+    if(round(NAs/total)==1 | round(empty/total)==1 | round(notNumber/total)==1){
+      col <- rbind(col, i)
+      count <- count+1;
+    }
+  }
+  
+  process <- dataframe[,as.numeric(col)*(-1)]
+  for(i in 1:(ncol(process)-1)){ process[,i] <- as.numeric(process[,i]); }
+  process[,c(1,2,3,4)*(-1)]
+}
+```
+
+So, now that I have a function to pre process the data, I need to pre process the Training data.   
+```{r warning=FALSE}
+cleanedData <- ProcessData(pmlTraining)
+```
+
+With all the data processed, it's time to start to train our model.   
+   
+First, load the packages that I will use (caret and randomForest).   
+Then, split the training dataset into two new datasets: trainSet and validationSet.
+```{r warning=FALSE}
+library(caret)
+library(randomForest)
+
+inTrain <- createDataPartition(y = cleanedData$classe, p = 0.7, list = FALSE)
+
+trainSet <- cleanedData[inTrain,]
+validationSet <- cleanedData[-inTrain,]
+```
+
+Now it's time to train the model using randomForest.
+```{r warning=FALSE, cache=TRUE}
+fit <- randomForest(classe ~ ., data = trainSet)
+```
+
+With the model trained, let's test with our validationSet.
+```{r warning=FALSE}
+confusionMatrix(predict(fit, validationSet[,-53]), validationSet$classe)
+```
+
+Ok. Now I got a very accurate model.   
+Let's predict the pmlTesting.   
+
+Before just predict, we need to apply the same procedure done to our training set.   
+So, I just used my ProcessData function.   
+Then, it was just predict.
+```{r warning=FALSE}
+testSet <- ProcessData(pmlTesting)
+predict(fit, testSet)
+```
